@@ -8,7 +8,7 @@ import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
 
 
 
@@ -117,7 +117,7 @@ def get_gas_stations2(x, y):
         "code": "F240409104",
         "x": x,
         "y": y,
-        "radius": 1000,  # 반경 5km 이내의 주유소 검색
+        "radius": 2000,  # 반경 2km
         "sort": 1,
         "prodcd": "B027",
         "out": "xml"
@@ -126,36 +126,31 @@ def get_gas_stations2(x, y):
     if response.status_code == 200:
         return response.text
     else:
+        logger.error(f"API 요청 실패: {response.status_code}")
         return None
 
 
-@app.route('/api/gas-stations', methods=['GET'])
+@app.route('/api/gas-stations', methods=['POST'])
 def api_get_gas_stations():
-    # 유저의 위치 정보를 받아옵니다.
-    user_latitude = 37.531513
-    user_longitude = 127.136948
+    data = request.get_json()
+    latitude = data['latitude']
+    longitude = data['longitude']
 
-    # 유저의 위치를 TM128 좌표로 변환합니다.
-    tm_x, tm_y = user_location_to_tm128(user_latitude, user_longitude)
-
-    # API를 호출하여 주유소 정보를 가져옵니다.
+    tm_x, tm_y = user_location_to_tm128(latitude, longitude)
     gas_station_data = get_gas_stations2(tm_x, tm_y)
 
-    # 가져온 주유소 정보를 JSON으로 변환하여 반환합니다.
     if gas_station_data:
         root = ET.fromstring(gas_station_data)
         stations = []
         for oil in root.findall('.//OIL'):
-            station = {
+            stations.append({
                 'name': oil.find('OS_NM').text,
-                'price': oil.find('PRICE').text,  # 예시로 가격 정보도 포함
-                'brand': oil.find('POLL_DIV_CO').text,  # 예시로 브랜드 정보도 포함
-                # 추가적으로 필요한 정보들을 포함시킬 수 있습니다.
-            }
-            stations.append(station)
+                'price': oil.find('PRICE').text,
+                'brand': oil.find('POLL_DIV_CO').text
+            })
         return jsonify(stations)
     else:
-        return jsonify({'error': 'Failed to fetch gas station data.'}), 500
+        return jsonify({'error': 'Failed to fetch gas station data'}), 500
 
 
 
