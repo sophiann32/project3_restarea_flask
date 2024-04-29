@@ -8,7 +8,7 @@ import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, supports_credentials=True)
 
 
 
