@@ -18,6 +18,49 @@ logger = logging.getLogger()
 # 캐시를 저장할 딕셔너리 초기화
 cache = {}
 
+# 5번 cors 해결해보자 주유소검색 api 데이터 뿌리기
+def get_request_search_url():
+    url = 'http://https://www.opinet.co.kr/api/searchByName.do'
+    params = {
+        "code":'F240409104',
+        'out': 'json',
+        'osnm': '보라매'
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        return response.text
+    else:
+        return None
+
+@app.route('/api/Search', methods=['GET'])
+def get_avg_search():
+    # Opinet API를 사용하여 평균 가격 정보를 가져오는 함수
+    response_text = get_request_search_url()
+
+    if response_text:
+        # JSON 형식의 응답을 파싱하여 필요한 정보를 추출합니다.
+        search_data = json.loads(response_text)
+
+        # Opinet API의 응답 형식에 따라 필드 값을 추출합니다.
+        stations = []
+        for oil in search_data['RESULT']['OIL']:
+            station = {
+                'name': oil['OS_NM'],
+                'address': oil['NEW_ADR'],
+                'GIS_X': oil['GIS_X_COOR'],
+                'GIS_Y': oil['GIS_Y_COOR'],
+                # 추가적으로 필요한 정보들을 추출합니다.
+            }
+            stations.append(station)
+
+        return jsonify(stations)
+    else:
+        return jsonify({'error': 'Failed to fetch data from the API'}), 500
+
+
+
+
+
 # 1번 주변 주유소 데이터 뿌리기
 # WGS84에서 TM128으로 변환하는 함수
 def user_location_to_tm128(latitude, longitude):
@@ -311,7 +354,7 @@ def get_restareas():
     app.logger.debug(f"Received route: {route_name}")
 
     try:
-        connection = cx_Oracle.connect('restarea/1577@//localhost:1521/xe')
+        connection = cx_Oracle.connect('restarea/1577@//192.168.0.27:1521/xe')
         cursor = connection.cursor()
         app.logger.debug("Database connection established")
 
