@@ -298,5 +298,101 @@ def query_database(latitude, longitude):
         return {"error": str(error.message)}
 
 
+
+API_KEY =  "7423400608"
+
+@app.route('/restareas', methods=['GET'])
+def get_restareas():
+    route_name = request.args.get('route')
+    if not route_name:
+        app.logger.debug("No route provided in the request")
+        return jsonify({'error': 'No route provided'}), 400
+
+    app.logger.debug(f"Received route: {route_name}")
+
+    try:
+        connection = cx_Oracle.connect('restarea/1577@//localhost:1521/xe')
+        cursor = connection.cursor()
+        app.logger.debug("Database connection established")
+
+        cursor.execute("""
+            SELECT 휴게소명, 도로노선명, 위도, 경도, 휴게소전화번호, 경정비가능여부, 주유소유무, LPG충전소유무, 쉼터유무
+            FROM restareas
+            WHERE 도로노선명 = :route
+        """, route=route_name)
+        app.logger.debug("Query executed")
+
+        columns = [col[0] for col in cursor.description]
+        result = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        cursor.close()
+        connection.close()
+        app.logger.debug("Database connection closed")
+
+        return jsonify(result)
+    except Exception as e:
+        app.logger.error(f"An error occurred: {e}")
+        return jsonify({'error': 'Database error'}), 500
+
+# 추가된 외부 API 호출 함수
+@app.route('/restbrands', methods=['GET'])
+def get_rest_brands():
+    route_nm = request.args.get('routeNm')
+    if not route_nm:
+        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
+
+    url = f"https://data.ex.co.kr/openapi/restinfo/restBrandList?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeNm={route_nm}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return jsonify(response.json())
+    else:
+        return jsonify({'error': '데이터 전송 오류'}), 500
+
+@app.route('/bestfoods', methods=['GET'])
+def get_best_foods():
+    route_nm = request.args.get('routeNm')
+    if not route_nm:
+        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
+
+    url = f"https://data.ex.co.kr/openapi/restinfo/restBestfoodList?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeNm={route_nm}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return jsonify(response.json())
+    else:
+        return jsonify({'error': '데이터 전송 오류'}), 500
+
+@app.route('/facilities', methods=['GET'])
+def get_facilities():
+    route_nm = request.args.get('routeNm')
+    if not route_nm:
+        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
+
+    url = f"https://data.ex.co.kr/openapi/business/serviceAreaRoute?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeName={route_nm}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return jsonify(response.json())
+    else:
+        return jsonify({'error': '데이터 전송 오류'}), 500
+
+@app.route('/fuelprices', methods=['GET'])
+def get_fuel_prices():
+    route_nm = request.args.get('routeNm')
+    if not route_nm:
+        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
+
+    url = f"https://data.ex.co.kr/openapi/business/curStateStation?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeName={route_nm}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return jsonify(response.json())
+    else:
+        return jsonify({'error': '데이터 전송 오류'}), 500
+
+
+
+
+
+
+
+
+
 if __name__ == '__main__':
     app.run(debug=True)
