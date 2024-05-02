@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import xml.etree.ElementTree as ET
-from pyproj import Proj, transform
+from pyproj import Proj, transform, Transformer
 from flask_cors import CORS
 import json
 import cx_Oracle
@@ -385,6 +385,52 @@ def get_fuel_prices():
         return jsonify(response.json())
     else:
         return jsonify({'error': '데이터 전송 오류'}), 500
+
+def user_location_to_tm128(latitude, longitude):
+    transformer = Transformer.from_crs("EPSG:4326", "+proj=tmerc +lat_0=38N +lon_0=128E +ellps=bessel +x_0=400000 +y_0=600000 +k=0.9999 +towgs84=-146.43,507.89,681.46", always_xy=True)
+    x_point, y_point = transformer.transform(longitude, latitude)
+    print(f"Transformed Latitude and Longitude ({latitude}, {longitude}) to TM128 coordinates ({x_point}, {y_point})")
+    return x_point, y_point
+
+# 주유소 정보를 가져오는 함수
+def get_gas_stations(x, y):
+    url = "http://www.opinet.co.kr/api/aroundAll.do"
+    params = {"code": "F240409104", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        print(f"Received response from API for coordinates ({x}, {y}) with status {response.status_code}")
+        return response.text
+    else:
+        print(f"Failed to fetch data for coordinates ({x}, {y}) with status {response.status_code}")
+        response.raise_for_status()
+
+
+# 주유소 정보를 제공하는 API 라우트
+@app.route('/get_gas_stations', methods=['post'])
+def get_gas_stations_route():
+    try:
+        data = request.json
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        if not latitude or not longitude:
+            return jsonify({"error": "Missing latitude or longitude"}), 400
+        print(f"Received request for latitude {latitude} and longitude {longitude}")
+        tm_x, tm_y = user_location_to_tm128(latitude, longitude)
+        gas_station_data = get_gas_stations(tm_x, tm_y)
+        print('주유소데이터'+ gas_station_data)
+        return jsonify({"data": gas_station_data})
+    except ValueError as e:
+        print(f"Error: {str(e)}")
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        print(f"Unexpected Error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+
+# -----------------------------------전기차충전소코드-------------------------------------------
+
+
 
 
 
