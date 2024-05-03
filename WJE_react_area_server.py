@@ -9,7 +9,7 @@ import logging  # 로깅을 위한 모듈 임포트
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
-
+# CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"]}})
 
 
 logging.basicConfig(level=logging.INFO)
