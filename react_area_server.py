@@ -391,7 +391,7 @@ def user_location_to_tm128(latitude, longitude):
     return x_point, y_point
 
 # 주유소 정보를 가져오는 함수
-def get_gas_stations(x, y):
+def get_gas_stations22(x, y):
     url = "http://www.opinet.co.kr/api/aroundAll.do"
     params = {"code": "F240409104", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
     response = requests.get(url, params=params)
@@ -404,7 +404,7 @@ def get_gas_stations(x, y):
 
 
 # 주유소 정보를 제공하는 API 라우트
-@app.route('/get_gas_stations', methods=['post'])
+@app.route('/get_gas_stations22', methods=['post'])
 def get_gas_stations_route():
     try:
         data = request.json
