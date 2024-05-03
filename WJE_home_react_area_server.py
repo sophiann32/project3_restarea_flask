@@ -1,17 +1,15 @@
 from flask import Flask, request, jsonify
 import requests
 import xml.etree.ElementTree as ET
-from pyproj import Proj, transform, Transformer
+from pyproj import Proj, transform
 from flask_cors import CORS
 import json
 import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
 
-from urllib.parse import quote
-
-
 app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
+# CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000"]}})
 
 
 logging.basicConfig(level=logging.INFO)
@@ -19,73 +17,6 @@ logger = logging.getLogger()
 
 # 캐시를 저장할 딕셔너리 초기화
 cache = {}
-
-def get_db_connection():
-    dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
-    return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
-
-
-
-# 5번 지은 데이터 불러오기
-
-
-
-def get_request_search_url():
-    url = 'http://www.opinet.co.kr/api/searchByName.do'
-    params = {
-        "code" : 'F240409104',
-        'out': 'json',
-        'osnm': '보라매'
-    }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        return response.text
-    else:
-        return None
-
-@app.route('/api/search', methods=['GET','POST'])
-def get_avg_search():
-    # Opinet API를 사용하여 평균 가격 정보를 가져오는 함수
-    response_text = get_request_search_url()
-
-    if response_text:
-        # JSON 형식의 응답을 파싱하여 필요한 정보를 추출합니다.
-        search_data = json.loads(response_text)
-
-        # Opinet API의 응답 형식에 따라 필드 값을 추출합니다.
-        stations = []
-        for oil in search_data['RESULT']['OIL']:
-            station = {
-                'name': oil['OS_NM'],
-                'address': oil['NEW_ADR'],
-                # 'GIS_X': oil['GIS_X_COOR'],
-                # 'GIS_Y': oil['GIS_Y_COOR'],
-                # 추가적으로 필요한 정보들을 추출합니다.
-            }
-            stations.append(station)
-
-        return jsonify(stations)
-    else:
-        return jsonify({'error': 'Failed to fetch data from the API'}), 500
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 # 1번 주변 주유소 데이터 뿌리기
 # WGS84에서 TM128으로 변환하는 함수
@@ -324,7 +255,9 @@ def handle_location():
 
 def query_database(latitude, longitude):
     try:
-        connection = get_db_connection()
+        dsn = cx_Oracle.makedsn("localhost", 1521, service_name="xe")
+        print(f"Received latitude: {latitude}, longitude: {longitude}")  # 받은 위도, 경도 출력
+        connection = cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
         cursor = connection.cursor()
 
         # 쿼리 파라미터 바인딩
@@ -363,203 +296,6 @@ def query_database(latitude, longitude):
         error, = e.args
         print(f"Database Error: {error.message}")  # 데이터베이스 오류 출력
         return {"error": str(error.message)}
-
-
-
-API_KEY =  "7423400608"
-
-@app.route('/restareas', methods=['GET'])
-def get_restareas():
-    route_name = request.args.get('route')
-    if not route_name:
-        return jsonify({'error': 'No route provided'}), 400
-
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-
-        cursor.execute("""
-            SELECT 휴게소명, 도로노선명, 위도, 경도, 휴게소전화번호, 경정비가능여부, 주유소유무, LPG충전소유무, 쉼터유무
-            FROM restareas
-            WHERE 도로노선명 = :route
-        """, route=route_name)
-        app.logger.debug("Query executed")
-
-        columns = [col[0] for col in cursor.description]
-        result = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        cursor.close()
-        connection.close()
-        app.logger.debug("Database connection closed")
-
-        return jsonify(result)
-    except Exception as e:
-        app.logger.error(f"An error occurred: {e}")
-        return jsonify({'error': 'Database error'}), 500
-
-# 추가된 외부 API 호출 함수
-@app.route('/restbrands', methods=['GET'])
-def get_rest_brands():
-    route_nm = request.args.get('routeNm')
-    if not route_nm:
-        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
-
-    url = f"https://data.ex.co.kr/openapi/restinfo/restBrandList?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeNm={route_nm}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return jsonify(response.json())
-    else:
-        return jsonify({'error': '데이터 전송 오류'}), 500
-
-@app.route('/bestfoods', methods=['GET'])
-def get_best_foods():
-    route_nm = request.args.get('routeNm')
-    if not route_nm:
-        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
-
-    url = f"https://data.ex.co.kr/openapi/restinfo/restBestfoodList?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeNm={route_nm}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return jsonify(response.json())
-    else:
-        return jsonify({'error': '데이터 전송 오류'}), 500
-
-@app.route('/facilities', methods=['GET'])
-def get_facilities():
-    route_nm = request.args.get('routeNm')
-    if not route_nm:
-        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
-
-    url = f"https://data.ex.co.kr/openapi/business/serviceAreaRoute?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeName={route_nm}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return jsonify(response.json())
-    else:
-        return jsonify({'error': '데이터 전송 오류'}), 500
-
-@app.route('/fuelprices', methods=['GET'])
-def get_fuel_prices():
-    route_nm = request.args.get('routeNm')
-    if not route_nm:
-        return jsonify({'error': '라우트 이름이 일치하지않음'}), 400
-
-    url = f"https://data.ex.co.kr/openapi/business/curStateStation?key={API_KEY}&type=json&numOfRows=10&pageNo=1&routeName={route_nm}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return jsonify(response.json())
-    else:
-        return jsonify({'error': '데이터 전송 오류'}), 500
-
-def user_location_to_tm128(latitude, longitude):
-    transformer = Transformer.from_crs("EPSG:4326", "+proj=tmerc +lat_0=38N +lon_0=128E +ellps=bessel +x_0=400000 +y_0=600000 +k=0.9999 +towgs84=-146.43,507.89,681.46", always_xy=True)
-    x_point, y_point = transformer.transform(longitude, latitude)
-    print(f"Transformed Latitude and Longitude ({latitude}, {longitude}) to TM128 coordinates ({x_point}, {y_point})")
-    return x_point, y_point
-
-# 주유소 정보를 가져오는 함수
-def get_gas_stations22(x, y):
-    url = "http://www.opinet.co.kr/api/aroundAll.do"
-    params = {"code": "F240409104", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        print(f"Received response from API for coordinates ({x}, {y}) with status {response.status_code}")
-        return response.text
-    else:
-        print(f"Failed to fetch data for coordinates ({x}, {y}) with status {response.status_code}")
-        response.raise_for_status()
-
-
-# 주유소 정보를 제공하는 API 라우트
-@app.route('/get_gas_stations22', methods=['post'])
-def get_gas_stations_route():
-    try:
-        data = request.json
-        latitude = data.get('latitude')
-        longitude = data.get('longitude')
-        if not latitude or not longitude:
-            return jsonify({"error": "Missing latitude or longitude"}), 400
-        print(f"Received request for latitude {latitude} and longitude {longitude}")
-        tm_x, tm_y = user_location_to_tm128(latitude, longitude)
-        gas_station_data = get_gas_stations(tm_x, tm_y)
-        print('주유소데이터'+ gas_station_data)
-        return jsonify({"data": gas_station_data})
-    except ValueError as e:
-        print(f"Error: {str(e)}")
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        print(f"Unexpected Error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-
-
-# -----------------------------------전기차충전소코드-------------------------------------------
-
-
-@app.route('/api/charging-stations-jeju')
-def get_charging_stations():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    api_url = "http://api.jejuits.go.kr/api/infoEvList?code=860634"
-    response = requests.get(api_url)
-    api_data = response.json()
-
-    api_info = {item['id']: {'fast': item['fast'], 'slow': item['slow']} for item in api_data['info']}
-    api_ids = list(api_info.keys())
-
-    def chunked_list(lst, n):
-        for i in range(0, len(lst), n):
-            yield lst[i:i + n]
-
-    results = []
-    for ids_chunk in chunked_list(api_ids, 1000):
-        id_str = ', '.join(f"'{id}'" for id in ids_chunk)
-        query = f"""
-        SELECT id, addr, use_time, free, b_call, type, x_crdn, y_crdn
-        FROM charging_info
-        WHERE id IN ({id_str})
-        """
-        cursor.execute(query)
-        for row in cursor:
-            result = {
-                "ID": row[0],
-                "Address": row[1],
-                "Usage Time": row[2],
-                "Free": row[3],
-                "Booking Call": row[4],
-                "Type": row[5],
-                "X Coordinate": row[6],
-                "Y Coordinate": row[7],
-                "Fast Chargers": api_info[row[0]]['fast'],
-                "Slow Chargers": api_info[row[0]]['slow']
-            }
-            results.append(result)
-
-    cursor.close()
-    conn.close()
-    return jsonify(results)
-
-@app.route('/api/tourism-spots')
-def get_tourism_spots():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    query = """
-    SELECT CONTENTS_ID, CONTENTS_LABEL, TITLE, ADDRESS, ROAD_ADDRESS, TAG, INTRODUCTION, LATITUDE, LONGITUDE, POST_CODE, PHONE_NO, IMG_PATH, THUMBNAIL_PATH
-    FROM tourism_spots
-    """
-    cursor.execute(query)
-    columns = [col[0] for col in cursor.description]
-    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-
-    cursor.close()
-    conn.close()
-    return jsonify(results)
-
-
-
-
-
-
 
 
 if __name__ == '__main__':
