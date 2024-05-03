@@ -414,7 +414,7 @@ def get_gas_stations_route():
             return jsonify({"error": "Missing latitude or longitude"}), 400
         print(f"Received request for latitude {latitude} and longitude {longitude}")
         tm_x, tm_y = user_location_to_tm128(latitude, longitude)
-        gas_station_data = get_gas_stations(tm_x, tm_y)
+        gas_station_data = get_gas_stations22(tm_x, tm_y)
         print('주유소데이터'+ gas_station_data)
         return jsonify({"data": gas_station_data})
     except ValueError as e:
