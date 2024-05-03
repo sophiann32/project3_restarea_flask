@@ -18,6 +18,10 @@ logger = logging.getLogger()
 # 캐시를 저장할 딕셔너리 초기화
 cache = {}
 
+def get_db_connection():
+    dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
+    return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
+
 # 1번 주변 주유소 데이터 뿌리기
 # WGS84에서 TM128으로 변환하는 함수
 def user_location_to_tm128(latitude, longitude):
@@ -255,9 +259,7 @@ def handle_location():
 
 def query_database(latitude, longitude):
     try:
-        dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
-        print(f"Received latitude: {latitude}, longitude: {longitude}")  # 받은 위도, 경도 출력
-        connection = cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
+        connection = get_db_connection()
         cursor = connection.cursor()
 
         # 쿼리 파라미터 바인딩
@@ -305,15 +307,11 @@ API_KEY =  "7423400608"
 def get_restareas():
     route_name = request.args.get('route')
     if not route_name:
-        app.logger.debug("No route provided in the request")
         return jsonify({'error': 'No route provided'}), 400
 
-    app.logger.debug(f"Received route: {route_name}")
-
     try:
-        connection = cx_Oracle.connect('restarea/1577@//localhost:1521/xe')
+        connection = get_db_connection()
         cursor = connection.cursor()
-        app.logger.debug("Database connection established")
 
         cursor.execute("""
             SELECT 휴게소명, 도로노선명, 위도, 경도, 휴게소전화번호, 경정비가능여부, 주유소유무, LPG충전소유무, 쉼터유무
@@ -431,7 +429,66 @@ def get_gas_stations_route():
 # -----------------------------------전기차충전소코드-------------------------------------------
 
 
+@app.route('/api/charging-stations-jeju')
+def get_charging_stations():
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
+    api_url = "http://api.jejuits.go.kr/api/infoEvList?code=860634"
+    response = requests.get(api_url)
+    api_data = response.json()
+
+    api_info = {item['id']: {'fast': item['fast'], 'slow': item['slow']} for item in api_data['info']}
+    api_ids = list(api_info.keys())
+
+    def chunked_list(lst, n):
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
+
+    results = []
+    for ids_chunk in chunked_list(api_ids, 1000):
+        id_str = ', '.join(f"'{id}'" for id in ids_chunk)
+        query = f"""
+        SELECT id, addr, use_time, free, b_call, type, x_crdn, y_crdn
+        FROM charging_info
+        WHERE id IN ({id_str})
+        """
+        cursor.execute(query)
+        for row in cursor:
+            result = {
+                "ID": row[0],
+                "Address": row[1],
+                "Usage Time": row[2],
+                "Free": row[3],
+                "Booking Call": row[4],
+                "Type": row[5],
+                "X Coordinate": row[6],
+                "Y Coordinate": row[7],
+                "Fast Chargers": api_info[row[0]]['fast'],
+                "Slow Chargers": api_info[row[0]]['slow']
+            }
+            results.append(result)
+
+    cursor.close()
+    conn.close()
+    return jsonify(results)
+
+@app.route('/api/tourism-spots')
+def get_tourism_spots():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    query = """
+    SELECT CONTENTS_ID, CONTENTS_LABEL, TITLE, ADDRESS, ROAD_ADDRESS, TAG, INTRODUCTION, LATITUDE, LONGITUDE, POST_CODE, PHONE_NO, IMG_PATH, THUMBNAIL_PATH
+    FROM tourism_spots
+    """
+    cursor.execute(query)
+    columns = [col[0] for col in cursor.description]
+    results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+    cursor.close()
+    conn.close()
+    return jsonify(results)
 
 
 
