@@ -18,7 +18,8 @@ logger = logging.getLogger()
 cache = {}
 
 def get_db_connection():
-    dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
+    # dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
+    dsn = cx_Oracle.makedsn("localhost", 1521, service_name="xe")
     return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
 
 # 1번 주변 주유소 데이터 뿌리기
@@ -413,7 +414,7 @@ def get_gas_stations_route():
             return jsonify({"error": "Missing latitude or longitude"}), 400
         print(f"Received request for latitude {latitude} and longitude {longitude}")
         tm_x, tm_y = user_location_to_tm128(latitude, longitude)
-        gas_station_data = get_gas_stations(tm_x, tm_y)
+        gas_station_data = get_gas_stations22(tm_x, tm_y)
         print('주유소데이터'+ gas_station_data)
         return jsonify({"data": gas_station_data})
     except ValueError as e:
@@ -430,6 +431,13 @@ def get_gas_stations_route():
 
 @app.route('/api/charging-stations-jeju')
 def get_charging_stations():
+
+
+    latitude = float(request.args.get('latitude', 33.499621))
+    longitude = float(request.args.get('longitude', 126.531188))
+    radius = float(request.args.get('radius', 5))
+
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -448,21 +456,38 @@ def get_charging_stations():
     for ids_chunk in chunked_list(api_ids, 1000):
         id_str = ', '.join(f"'{id}'" for id in ids_chunk)
         query = f"""
-        SELECT id, addr, use_time, free, b_call, type, x_crdn, y_crdn
-        FROM charging_info
-        WHERE id IN ({id_str})
-        """
-        cursor.execute(query)
+          SELECT ID, NAME, ADDR, X_CRDN AS lat, Y_CRDN AS lng, USE_TIME, TYPE, distance
+          FROM (
+              SELECT ID, NAME, ADDR, X_CRDN, Y_CRDN, USE_TIME, TYPE,
+                     (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) AS distance,
+                     ROW_NUMBER() OVER (PARTITION BY NAME, ID ORDER BY (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) ASC) AS rn
+              FROM charging_info
+              WHERE X_CRDN BETWEEN :lat_min AND :lat_max AND Y_CRDN BETWEEN :lng_min AND :lng_max
+                    AND (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) < :radius
+          ) 
+          WHERE rn = 1 AND ID IN ({id_str})
+          """
+
+        cursor.execute(query, {
+            'latitude': latitude,
+            'longitude': longitude,
+            'lat_min': latitude - 0.05,
+            'lat_max': latitude + 0.05,
+            'lng_min': longitude - 0.05,
+            'lng_max': longitude + 0.05,
+            'radius': radius
+        })
+
         for row in cursor:
             result = {
                 "ID": row[0],
-                "Address": row[1],
-                "Usage Time": row[2],
-                "Free": row[3],
-                "Booking Call": row[4],
-                "Type": row[5],
-                "X Coordinate": row[6],
-                "Y Coordinate": row[7],
+                "Name": row[1],
+                "Address": row[2],
+                "lat": row[3],
+                "lng": row[4],
+                "Usage Time": row[5],
+                "Type": row[6],
+                "Distance": row[7],
                 "Fast Chargers": api_info[row[0]]['fast'],
                 "Slow Chargers": api_info[row[0]]['slow']
             }
@@ -470,7 +495,9 @@ def get_charging_stations():
 
     cursor.close()
     conn.close()
+    app.logger.info(f"Found {len(results)} charging stations")
     return jsonify(results)
+
 
 @app.route('/api/tourism-spots')
 def get_tourism_spots():
