@@ -28,12 +28,13 @@ def get_avg_search():
     code = request.args.get('code')
     out = request.args.get('out')
     osnm = request.args.get('osnm')
-
+    area = request.args.get('area')
     url = 'http://www.opinet.co.kr/api/searchByName.do'
     params = {
         "code" : code,
         'out': out,
         'osnm': osnm,
+        'area': area
     }
     response = requests.get(url, params=params)
 
@@ -41,19 +42,22 @@ def get_avg_search():
         response_text = response.text
         search_data = json.loads(response_text)
 
-        stations = []
+        FindingStations = []
         for oil in search_data['RESULT']['OIL']:
-            station = {
+            FindingStation = {
                 'name': oil['OS_NM'],
                 'address': oil['NEW_ADR'],
                 'GIS_X': oil['GIS_X_COOR'],
-                'GIS_Y': oil['GIS_Y_COOR']
+                'GIS_Y': oil['GIS_Y_COOR'],
+                'Gas_Trade_name': oil['POLL_DIV_CD'],
+                'LPG_YN': oil['LPG_YN'],
+                'Charge_Trade_name': oil['GPOLL_DIV_CD']
             }
-            stations.append(station)
+            FindingStations.append(FindingStation)
 
-        return jsonify(stations)
+        return jsonify(FindingStations)
     else:
-        return jsonify({'error': 'Failed to fetch data from the API'}), 500
+        return jsonify({'search_error': 'Failed to fetch data from the API'}), 500
 
 
 
