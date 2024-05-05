@@ -30,7 +30,6 @@ def get_db_connection():
 # 5번 지은 데이터 불러오기
 
 
-
 # def get_request_search_url():
 #     url = 'http://www.opinet.co.kr/api/searchByName.do'
 #     params = {
