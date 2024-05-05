@@ -7,6 +7,9 @@ import json
 import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
 
+from urllib.parse import quote
+
+
 app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
 
@@ -18,12 +21,56 @@ logger = logging.getLogger()
 cache = {}
 
 def get_db_connection():
-    # dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
     dsn = cx_Oracle.makedsn("localhost", 1521, service_name="xe")
+    # dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
     return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
 
 
-# 추가되는 부분
+
+# 5번 지은 데이터 불러오기
+
+
+# def get_request_search_url():
+#     url = 'http://www.opinet.co.kr/api/searchByName.do'
+#     params = {
+#         "code" : 'F240409104',
+#         'out': 'json',
+#         'osnm': '보라매'
+#     }
+#     response = requests.get(url, params=params)
+#     if response.status_code == 200:
+#         return response.text
+#     else:
+#         return None
+
+# @app.route('/api/search', methods=['GET','POST'])
+# def get_avg_search():
+#     # Opinet API를 사용하여 평균 가격 정보를 가져오는 함수
+#     response_text = get_request_search_url()
+#
+#     if response_text:
+#         # JSON 형식의 응답을 파싱하여 필요한 정보를 추출합니다.
+#         search_data = json.loads(response_text)
+#
+#         # Opinet API의 응답 형식에 따라 필드 값을 추출합니다.
+#         stations = []
+#         for oil in search_data['RESULT']['OIL']:
+#             station = {
+#                 'name': oil['OS_NM'],
+#                 'address': oil['NEW_ADR'],
+#                 'GIS_X': oil['GIS_X_COOR'],
+#                 'GIS_Y': oil['GIS_Y_COOR']
+#                 # 추가적으로 필요한 정보들을 추출합니다.
+#             }
+#             stations.append(station)
+#
+#         return jsonify(stations)
+#     else:
+#         return jsonify({'error': 'Failed to fetch data from the API'}), 500
+#
+
+#TEST
+
 @app.route('/api/search', methods=['GET'])
 def get_FindingStation():
     code = request.args.get('code')
@@ -55,6 +102,59 @@ def get_FindingStation():
         return jsonify(FindingStations)
     else:
         return jsonify({'error': 'Failed to fetch data from the API'}), 500
+
+
+#TEST2
+# def tm_to_wgs84_2(x, y):
+#     in_proj = Proj('+proj=tmerc +lat_0=38 +lon_0=128 +k=1 +x_0=400000 +y_0=600000 +ellps=bessel +towgs84=-146.43,507.89,681.46')
+#     out_proj = Proj(proj='latlong', datum='WGS84')
+#     longitude, latitude = transform(in_proj, out_proj, x, y)
+#     return longitude, latitude
+#
+# @app.route('/api/search', methods=['POST'])
+# def get_avg_search():
+#     data = json.loads(request.get_json())
+#     osnm = data['osnm']
+#     params = {
+#         "code": 'F240409104',
+#         'out': 'json',
+#         'osnm': osnm,
+#     }
+#     response_text = get_avg_search(params)
+#
+#     if response_text:
+#         search_data = json.loads(response_text)
+#         stations = []
+#         for oil in search_data['RESULT']['OIL']:
+#             station = {
+#                 'UNI_ID': oil['UNI_ID'],
+#                 'OS_NM': oil['OS_NM'],
+#                 'NEW_ADR': oil['NEW_ADR'],
+#                 'GIS_X_COOR': oil['GIS_X_COOR'],
+#                 'GIS_Y_COOR': oil['GIS_Y_COOR'],
+#             }
+#             # Convert TM coordinates to WGS84 coordinates
+#             longitude, latitude = tm_to_wgs84_2(station['GIS_X_COOR'], station['GIS_Y_COOR'])
+#             station['longitude'] = longitude
+#             station['latitude'] = latitude
+#             stations.append(station)
+#
+#         return jsonify(stations)
+#
+#     return jsonify([])
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -452,7 +552,7 @@ def get_gas_stations_route():
             return jsonify({"error": "Missing latitude or longitude"}), 400
         print(f"Received request for latitude {latitude} and longitude {longitude}")
         tm_x, tm_y = user_location_to_tm128(latitude, longitude)
-        gas_station_data = get_gas_stations22(tm_x, tm_y)
+        gas_station_data = get_gas_stations(tm_x, tm_y)
         print('주유소데이터'+ gas_station_data)
         return jsonify({"data": gas_station_data})
     except ValueError as e:
@@ -469,13 +569,6 @@ def get_gas_stations_route():
 
 @app.route('/api/charging-stations-jeju')
 def get_charging_stations():
-
-
-    latitude = float(request.args.get('latitude', 33.499621))
-    longitude = float(request.args.get('longitude', 126.531188))
-    radius = float(request.args.get('radius', 5))
-
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -494,38 +587,21 @@ def get_charging_stations():
     for ids_chunk in chunked_list(api_ids, 1000):
         id_str = ', '.join(f"'{id}'" for id in ids_chunk)
         query = f"""
-          SELECT ID, NAME, ADDR, X_CRDN AS lat, Y_CRDN AS lng, USE_TIME, TYPE, distance
-          FROM (
-              SELECT ID, NAME, ADDR, X_CRDN, Y_CRDN, USE_TIME, TYPE,
-                     (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) AS distance,
-                     ROW_NUMBER() OVER (PARTITION BY NAME, ID ORDER BY (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) ASC) AS rn
-              FROM charging_info
-              WHERE X_CRDN BETWEEN :lat_min AND :lat_max AND Y_CRDN BETWEEN :lng_min AND :lng_max
-                    AND (6371 * acos(cos(:latitude*(acos(-1)/180)) * cos(X_CRDN*(acos(-1)/180)) * cos((Y_CRDN - :longitude)*(acos(-1)/180)) + sin(:latitude*(acos(-1)/180)) * sin(X_CRDN*(acos(-1)/180)))) < :radius
-          ) 
-          WHERE rn = 1 AND ID IN ({id_str})
-          """
-
-        cursor.execute(query, {
-            'latitude': latitude,
-            'longitude': longitude,
-            'lat_min': latitude - 0.05,
-            'lat_max': latitude + 0.05,
-            'lng_min': longitude - 0.05,
-            'lng_max': longitude + 0.05,
-            'radius': radius
-        })
-
+        SELECT id, addr, use_time, free, b_call, type, x_crdn, y_crdn
+        FROM charging_info
+        WHERE id IN ({id_str})
+        """
+        cursor.execute(query)
         for row in cursor:
             result = {
                 "ID": row[0],
-                "Name": row[1],
-                "Address": row[2],
-                "lat": row[3],
-                "lng": row[4],
-                "Usage Time": row[5],
-                "Type": row[6],
-                "Distance": row[7],
+                "Address": row[1],
+                "Usage Time": row[2],
+                "Free": row[3],
+                "Booking Call": row[4],
+                "Type": row[5],
+                "X Coordinate": row[6],
+                "Y Coordinate": row[7],
                 "Fast Chargers": api_info[row[0]]['fast'],
                 "Slow Chargers": api_info[row[0]]['slow']
             }
@@ -533,9 +609,7 @@ def get_charging_stations():
 
     cursor.close()
     conn.close()
-    app.logger.info(f"Found {len(results)} charging stations")
     return jsonify(results)
-
 
 @app.route('/api/tourism-spots')
 def get_tourism_spots():
