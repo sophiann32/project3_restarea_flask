@@ -31,45 +31,118 @@ def get_db_connection():
 
 
 
-def get_request_search_url():
+# def get_request_search_url():
+#     url = 'http://www.opinet.co.kr/api/searchByName.do'
+#     params = {
+#         "code" : 'F240409104',
+#         'out': 'json',
+#         'osnm': '보라매'
+#     }
+#     response = requests.get(url, params=params)
+#     if response.status_code == 200:
+#         return response.text
+#     else:
+#         return None
+
+# @app.route('/api/search', methods=['GET','POST'])
+# def get_avg_search():
+#     # Opinet API를 사용하여 평균 가격 정보를 가져오는 함수
+#     response_text = get_request_search_url()
+#
+#     if response_text:
+#         # JSON 형식의 응답을 파싱하여 필요한 정보를 추출합니다.
+#         search_data = json.loads(response_text)
+#
+#         # Opinet API의 응답 형식에 따라 필드 값을 추출합니다.
+#         stations = []
+#         for oil in search_data['RESULT']['OIL']:
+#             station = {
+#                 'name': oil['OS_NM'],
+#                 'address': oil['NEW_ADR'],
+#                 'GIS_X': oil['GIS_X_COOR'],
+#                 'GIS_Y': oil['GIS_Y_COOR']
+#                 # 추가적으로 필요한 정보들을 추출합니다.
+#             }
+#             stations.append(station)
+#
+#         return jsonify(stations)
+#     else:
+#         return jsonify({'error': 'Failed to fetch data from the API'}), 500
+#
+
+#TEST
+
+@app.route('/api/search', methods=['GET'])
+def get_FindingStation():
+    code = request.args.get('code')
+    out = request.args.get('out')
+    osnm = request.args.get('osnm')
+
     url = 'http://www.opinet.co.kr/api/searchByName.do'
     params = {
-        "code" : 'F240409104',
-        'out': 'json',
-        'osnm': '보라매'
+        "code" : code,
+        'out': out,
+        'osnm': osnm,
     }
     response = requests.get(url, params=params)
+
     if response.status_code == 200:
-        return response.text
-    else:
-        return None
-
-@app.route('/api/search', methods=['GET','POST'])
-def get_avg_search():
-    # Opinet API를 사용하여 평균 가격 정보를 가져오는 함수
-    response_text = get_request_search_url()
-
-    if response_text:
-        # JSON 형식의 응답을 파싱하여 필요한 정보를 추출합니다.
+        response_text = response.text
         search_data = json.loads(response_text)
 
-        # Opinet API의 응답 형식에 따라 필드 값을 추출합니다.
-        stations = []
+        FindingStations = []
         for oil in search_data['RESULT']['OIL']:
-            station = {
+            FindingStation = {
                 'name': oil['OS_NM'],
                 'address': oil['NEW_ADR'],
-                # 'GIS_X': oil['GIS_X_COOR'],
-                # 'GIS_Y': oil['GIS_Y_COOR'],
-                # 추가적으로 필요한 정보들을 추출합니다.
+                'GIS_X': oil['GIS_X_COOR'],
+                'GIS_Y': oil['GIS_Y_COOR']
             }
-            stations.append(station)
+            FindingStations .append(FindingStation)
 
-        return jsonify(stations)
+        return jsonify(FindingStations)
     else:
         return jsonify({'error': 'Failed to fetch data from the API'}), 500
 
 
+#TEST2
+# def tm_to_wgs84_2(x, y):
+#     in_proj = Proj('+proj=tmerc +lat_0=38 +lon_0=128 +k=1 +x_0=400000 +y_0=600000 +ellps=bessel +towgs84=-146.43,507.89,681.46')
+#     out_proj = Proj(proj='latlong', datum='WGS84')
+#     longitude, latitude = transform(in_proj, out_proj, x, y)
+#     return longitude, latitude
+#
+# @app.route('/api/search', methods=['POST'])
+# def get_avg_search():
+#     data = json.loads(request.get_json())
+#     osnm = data['osnm']
+#     params = {
+#         "code": 'F240409104',
+#         'out': 'json',
+#         'osnm': osnm,
+#     }
+#     response_text = get_avg_search(params)
+#
+#     if response_text:
+#         search_data = json.loads(response_text)
+#         stations = []
+#         for oil in search_data['RESULT']['OIL']:
+#             station = {
+#                 'UNI_ID': oil['UNI_ID'],
+#                 'OS_NM': oil['OS_NM'],
+#                 'NEW_ADR': oil['NEW_ADR'],
+#                 'GIS_X_COOR': oil['GIS_X_COOR'],
+#                 'GIS_Y_COOR': oil['GIS_Y_COOR'],
+#             }
+#             # Convert TM coordinates to WGS84 coordinates
+#             longitude, latitude = tm_to_wgs84_2(station['GIS_X_COOR'], station['GIS_Y_COOR'])
+#             station['longitude'] = longitude
+#             station['latitude'] = latitude
+#             stations.append(station)
+#
+#         return jsonify(stations)
+#
+#     return jsonify([])
 
 
 
