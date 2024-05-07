@@ -9,7 +9,7 @@ import logging  # 로깅을 위한 모듈 임포트
 
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
+CORS(app, supports_credentials=True, origins=['http://localhost:3001'])
 
 
 logging.basicConfig(level=logging.INFO)
@@ -83,7 +83,7 @@ def get_gas_stations(x, y, radius, prodcd):
     url = "http://www.opinet.co.kr/api/aroundAll.do"
     # 요청 파라미터 설정
     params = {
-        "code": "F240409104",
+        "code": "F240411107",
         "x": x,
         "y": y,
         "radius": radius,
@@ -160,7 +160,7 @@ def get_stations():
 def get_gas_stations2(x, y):
     url = "http://www.opinet.co.kr/api/aroundAll.do"
     params = {
-        "code": "F240409104",
+        "code": "F240411107",
         "x": x,
         "y": y,
         "radius": 2000,  # 반경 2km
@@ -205,7 +205,7 @@ def api_get_gas_stations():
 def get_request_url():
     url = 'http://www.opinet.co.kr/api/avgAllPrice.do'
     params = {
-        "code":'F240409104',
+        "code":'F240411107',
         'out': 'json'
     }
     response = requests.get(url, params=params)
@@ -249,7 +249,7 @@ def get_avg_all_price():
 def get_url_avg():
     url = 'https://www.opinet.co.kr/api/avgRecentPrice.do'
     params = {
-        "code":'F240409104',
+        "code":'F240411107',
         'out': 'json'
     }
     response = requests.get(url, params=params)
@@ -343,7 +343,7 @@ def query_database(latitude, longitude):
 
 
 
-API_KEY =  "7423400608"
+API_KEY =  "F240411107"
 
 @app.route('/restareas', methods=['GET'])
 def get_restareas():
@@ -435,7 +435,7 @@ def user_location_to_tm128(latitude, longitude):
 # 주유소 정보를 가져오는 함수
 def get_gas_stations22(x, y):
     url = "http://www.opinet.co.kr/api/aroundAll.do"
-    params = {"code": "F240409104", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
+    params = {"code": "F240411107", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
     response = requests.get(url, params=params)
     if response.status_code == 200:
         print(f"Received response from API for coordinates ({x}, {y}) with status {response.status_code}")
