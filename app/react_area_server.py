@@ -7,6 +7,7 @@ import json
 import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
 
+
 app = Flask(__name__)
 CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
 
@@ -18,8 +19,8 @@ logger = logging.getLogger()
 cache = {}
 
 def get_db_connection():
-    # dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
-    dsn = cx_Oracle.makedsn("localhost", 1521, service_name="xe")
+    dsn = cx_Oracle.makedsn("192.168.0.27", 1521, service_name="xe")
+    # dsn = cx_Oracle.makedsn("localhost", 1521, service_name="xe")
     return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
 
 
