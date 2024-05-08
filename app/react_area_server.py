@@ -9,7 +9,7 @@ import logging  # 로깅을 위한 모듈 임포트
 
 
 app = Flask(__name__)
-CORS(app, supports_credentials=True, origins=['http://localhost:3001'])
+CORS(app, supports_credentials=True, origins=['http://localhost:3000'])
 
 
 logging.basicConfig(level=logging.INFO)
@@ -343,7 +343,7 @@ def query_database(latitude, longitude):
 
 
 
-API_KEY =  "F240411107"
+API_KEY =  "7423400608"
 
 @app.route('/restareas', methods=['GET'])
 def get_restareas():
