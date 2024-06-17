@@ -3,9 +3,15 @@ import requests
 import xml.etree.ElementTree as ET
 from pyproj import Proj, transform, Transformer
 from flask_cors import CORS
+from openai import OpenAI
 import json
 import cx_Oracle
 import logging  # 로깅을 위한 모듈 임포트
+from dotenv import load_dotenv
+import os
+
+# 환경 변수 로드
+load_dotenv()
 
 
 app = Flask(__name__)
@@ -24,47 +30,99 @@ def get_db_connection():
     return cx_Oracle.connect(user="restarea", password="1577", dsn=dsn)
 
 
-# 추가되는 부분
-@app.route('/api/search', methods=['GET'])
-def get_avg_search():
+# chatbot
+OPEN_API_KEY =os.getenv("OPENAI_API_KEY")
+if OPEN_API_KEY is None:
+    raise ValueError("API key not found in environment variables")
+THREAD_iD = 'thread_5Utmoonk7gsfw8O76ojPvarV'
+ASSISTANT_ID = 'asst_kx1QWCJR2x9gqIGh4KBmnvoS'
+client = OpenAI(api_key=OPEN_API_KEY)
+
+@app.route('/ere', methods=['POST'])
+def solve_equation():
+    content = request.json['content']
+    print(content)
+    try:
+        # 새로운 쓰레드 생성
+        # thread = client.beta.threads.create()
+        # 사용자 메시지를 처리하는 메시지 생성
+        message = client.beta.threads.messages.create(
+            thread_id=THREAD_iD,
+            # thread_id=thread.id,
+            role="user",
+            content=content
+        )
+        # 결과를 받기 위해 실행
+        run = client.beta.threads.runs.create_and_poll(
+            # thread_id=thread.id,
+            thread_id=THREAD_iD,
+            assistant_id=ASSISTANT_ID,
+        )
+
+        if run.status == 'completed':
+            # 모든 메시지를 가져오고 마지막 메시지의 내용을 반환
+            messages = client.beta.threads.messages.list(thread_id=THREAD_iD)
+            last_message = messages.data[0].content[0].text.value
+            return jsonify({"status": "success", "answer": last_message})
+        else:
+            return jsonify({"status": "error", "message": "Failed to complete the run"})
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+# 통계에 검색 기능
+@app.route('/api/gas-stations', methods=['GET'])
+def get_gas_stations():
     code = request.args.get('code')
     out = request.args.get('out')
     osnm = request.args.get('osnm')
     area = request.args.get('area')
-    url = 'http://www.opinet.co.kr/api/searchByName.do'
-    params = {
-        "code" : code,
-        'out': out,
-        'osnm': osnm,
-        'area': area
-    }
+
+    try:
+        response = make_api_call('http://www.opinet.co.kr/api/searchByName.do', {
+            'code': code,
+            'out': out,
+            'osnm': osnm,
+            'area': area
+        })
+        response.raise_for_status()
+        gas_stations = response.json()['RESULT']['OIL']
+        return jsonify([{
+            'name': station['OS_NM'],
+            'address': station['NEW_ADR'],
+            'gas_trade_name': station['POLL_DIV_CD'],
+            'charge_trade_name': station['GPOLL_DIV_CD'],
+            'uni_id': station['UNI_ID']
+        } for station in gas_stations])
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to retrieve gas stations'}), 500
+
+
+@app.route('/api/gas-station-detail', methods=['GET'])
+def get_gas_station_detail():
+    uni_id = request.args.get('uni_id')
+    if not uni_id:
+        return jsonify({'error': 'UNI_ID is required'}), 400
+
+    try:
+        response = make_api_call('http://www.opinet.co.kr/api/detailById.do', {
+            'code': 'F240411107',
+            'out': 'json',
+            'id': uni_id
+        })
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to retrieve gas station detail'}), 500
+
+
+def make_api_call(url, params):
     response = requests.get(url, params=params)
-
-    if response.status_code == 200:
-        response_text = response.text
-        search_data = json.loads(response_text)
-
-        FindingStations = []
-        for oil in search_data['RESULT']['OIL']:
-            FindingStation = {
-                'name': oil['OS_NM'],
-                'address': oil['NEW_ADR'],
-                'GIS_X': oil['GIS_X_COOR'],
-                'GIS_Y': oil['GIS_Y_COOR'],
-                'Gas_Trade_name': oil['POLL_DIV_CD'],
-                'LPG_YN': oil['LPG_YN'],
-                'Charge_Trade_name': oil['GPOLL_DIV_CD']
-            }
-            FindingStations.append(FindingStation)
-
-        return jsonify(FindingStations)
-    else:
-        return jsonify({'search_error': 'Failed to fetch data from the API'}), 500
+    response.raise_for_status()
+    return response
+# ------------------------------------------------
 
 
-
-
-# 1번 주변 주유소 데이터 뿌리기
+# 차트1 내 주변 주유소 가격
 # WGS84에서 TM128으로 변환하는 함수
 def user_location_to_tm128(latitude, longitude):
     WGS84 = {'proj': 'latlong', 'datum': 'WGS84', 'ellps': 'WGS84'}
@@ -109,7 +167,7 @@ def tm_to_wgs84(x, y):
     logger.info(f"TM X={x}, TM Y={y} -> WGS 84 위도={latitude}, 경도={longitude}로 변환됨")
     return longitude, latitude
 
-# 주유소 정보를 제공하는 API 엔드포인트
+# 주유소 정보를 제공하는 API 엔드 포인트
 @app.route('/get-stations', methods=['POST'])
 def get_stations():
     data = request.json  # 클라이언트로부터 JSON 데이터 수신
@@ -201,7 +259,7 @@ def api_get_gas_stations():
 
 
 
-# 2번 전국 평균 오일 가격 데이터 뿌리기
+# 차트2 전국 평균 오일 가격 데이터 주기
 def get_request_url():
     url = 'http://www.opinet.co.kr/api/avgAllPrice.do'
     params = {
@@ -245,7 +303,7 @@ def get_avg_all_price():
 
 
 
-# 3번 최근 오일 가격 데이터 뿌리기
+# 차트3 최근 오일 가격 데이터 뿌리기
 def get_url_avg():
     url = 'https://www.opinet.co.kr/api/avgRecentPrice.do'
     params = {
@@ -288,7 +346,7 @@ def get_avg_recent_price():
     else:
         return jsonify({'error': 'Failed to fetch data from the API'}), 500
 
-# 4번 도넛 전기차 위치 정보 뿌리기
+# 차트4 전기차 위치 정보 주기(도넛 모양)
 @app.route('/location', methods=['POST'])
 def handle_location():
     data = request.get_json()
@@ -328,9 +386,12 @@ def query_database(latitude, longitude):
                        minLng=longitude - 0.1, maxLng=longitude + 0.1)
 
         stations = []
+
         for row in cursor.fetchall():
             stations.append({"Station Name": row[0], "Distance": row[1]})
-            print("Station Name: ", row[0], "Distance: ", row[1])  # 콘솔에 충전소 이름과 거리 출력
+            stations.sort(key=lambda x: x["Distance"])
+            for station in stations:
+                print("Station Name:", station["Station Name"], "Distance:", station["Distance"])
 
         cursor.close()
         connection.close()
@@ -435,7 +496,7 @@ def user_location_to_tm128(latitude, longitude):
 # 주유소 정보를 가져오는 함수
 def get_gas_stations22(x, y):
     url = "http://www.opinet.co.kr/api/aroundAll.do"
-    params = {"code": "F240411107", "x": x, "y": y, "radius": 5000, "sort": 1, "prodcd": "B027", "out": "xml"}
+    params = {"code": "F240411107", "x": x, "y": y, "radius": 5000, "sort": 2, "prodcd": "B027", "out": "xml"}
     response = requests.get(url, params=params)
     if response.status_code == 200:
         print(f"Received response from API for coordinates ({x}, {y}) with status {response.status_code}")

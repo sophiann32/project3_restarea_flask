@@ -1,0 +1,8 @@
+.idea/misc.xml
+.idea/rest_area_flask.iml
+app/__pycache__/react_area_server_test.cpython-311.pyc
+
+.env
+app/__pycache__/react_area_server.cpython-311.pyc
+
+*.pyc
