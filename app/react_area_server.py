@@ -37,7 +37,7 @@ if OPEN_API_KEY is None:
 
 THREAD_iD = 'thread_Yp5WHJFgFrPuncN9LvXqRJQI'
 #               asst_kx1QWCJR2x9gqIGh4KBmnvoS
-ASSISTANT_ID = 'asst_kx1QWCJR2x9gqIGh4KBmnvoS'
+ASSISTANT_ID = 'asst_kx1QWCJR2x9gqIGh4KBmnvoS'#
 client = OpenAI(api_key=OPEN_API_KEY)
 
 @app.route('/ere', methods=['POST'])
