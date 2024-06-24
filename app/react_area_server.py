@@ -63,7 +63,6 @@ def solve_equation():
         )
 
 
-        time.sleep(5)
         print(run.status)
         if run.status == 'completed':
             # 모든 메시지를 가져오고 마지막 메시지의 내용을 반환
