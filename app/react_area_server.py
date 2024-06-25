@@ -35,6 +35,7 @@ if OPEN_API_KEY is None:
 
 THREAD_iD = 'thread_Yp5WHJFgFrPuncN9LvXqRJQI'
 ASSISTANT_ID = 'asst_kx1QWCJR2x9gqIGh4KBmnvoS'
+
 client = OpenAI(api_key=OPEN_API_KEY)
 
 @app.route('/ere', methods=['POST'])
@@ -302,7 +303,7 @@ def get_avg_all_price():
 
 
 
-# 차트3 최근 오일 가격 데이터 뿌리기
+# 차트3 최근 오일 가격 데이터
 def get_url_avg():
     url = 'https://www.opinet.co.kr/api/avgRecentPrice.do'
     params = {
